@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Таро</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&family=Crimson+Pro:ital,wght@0,300;0,400;1,300&display=swap" rel="stylesheet">
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #0a0a0f;
+    --surface:   #111118;
+    --card-back: #12121c;
+    --gold:      #c9a96e;
+    --gold-dim:  #7a6040;
+    --cream:     #e8dfc8;
+    --muted:     #5a5468;
+    --glow:      rgba(201,169,110,0.25);
+    --selected:  #c9a96e;
+  }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--cream);
+    font-family: 'Crimson Pro', Georgia, serif;
+    overflow-x: hidden;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+  }
+
+  /* ── STARFIELD ── */
+  #stars {
+    position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    overflow: hidden;
+  }
+  .star {
+    position: absolute;
+    border-radius: 50%;
+    background: white;
+    animation: twinkle var(--d) ease-in-out infinite var(--delay);
+  }
+  @keyframes twinkle {
+    0%,100% { opacity: var(--min-op); transform: scale(1); }
+    50%      { opacity: var(--max-op); transform: scale(1.4); }
+  }
+
+  /* ── LAYOUT ── */
+  #app {
+    position: relative; z-index: 1;
+    min-height: 100vh;
+    display: flex; flex-direction: column;
+    padding: 0 0 120px;
+  }
+
+  /* ── HEADER ── */
+  header {
+    padding: 28px 20px 0;
+    text-align: center;
+  }
+  .eye {
+    font-size: 28px;
+    display: block;
+    margin-bottom: 10px;
+    filter: drop-shadow(0 0 12px var(--gold));
+    animation: pulse-eye 4s ease-in-out infinite;
+  }
+  @keyframes pulse-eye {
+    0%,100% { filter: drop-shadow(0 0 8px var(--gold)); }
+    50%      { filter: drop-shadow(0 0 20px var(--gold)); }
+  }
+  h1 {
+    font-family: 'Cinzel', serif;
+    font-size: 13px;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--gold);
+    font-weight: 400;
+  }
+  .question-box {
+    margin: 14px 20px 0;
+    padding: 12px 16px;
+    background: rgba(201,169,110,0.06);
+    border: 1px solid rgba(201,169,110,0.15);
+    border-radius: 8px;
+    font-size: 14px;
+    color: var(--cream);
+    font-style: italic;
+    line-height: 1.5;
+    text-align: center;
+  }
+
+  /* ── COUNTER ── */
+  .counter {
+    margin: 18px 20px 0;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+  }
+  .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    border: 1px solid var(--gold-dim);
+    transition: all 0.4s ease;
+  }
+  .dot.filled {
+    background: var(--gold);
+    border-color: var(--gold);
+    box-shadow: 0 0 8px var(--gold);
+  }
+  .counter-text {
+    font-size: 12px;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+    font-family: 'Cinzel', serif;
+  }
+
+  /* ── GRID ── */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    padding: 20px 16px 0;
+  }
+
+  /* ── CARD ── */
+  .card-wrap {
+    perspective: 800px;
+    cursor: pointer;
+  }
+  .card-inner {
+    position: relative;
+    width: 100%;
+    padding-bottom: 170%;
+    transform-style: preserve-3d;
+    transition: transform 0.7s cubic-bezier(0.23, 1, 0.32, 1);
+    border-radius: 10px;
+  }
+  .card-wrap.flipped .card-inner {
+    transform: rotateY(180deg);
+  }
+  .card-face {
+    position: absolute; inset: 0;
+    border-radius: 10px;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    overflow: hidden;
+  }
+
+  /* BACK */
+  .card-back-face {
+    background: var(--card-back);
+    border: 1px solid rgba(201,169,110,0.2);
+    display: flex; align-items: center; justify-content: center;
+    transition: border-color 0.3s, box-shadow 0.3s;
+  }
+  .card-wrap:not(.flipped):not(.selected) .card-back-face:hover {
+    border-color: rgba(201,169,110,0.5);
+    box-shadow: 0 0 20px rgba(201,169,110,0.1);
+  }
+  .card-pattern {
+    position: absolute; inset: 6px;
+    border: 1px solid rgba(201,169,110,0.12);
+    border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .card-pattern::before {
+    content: '';
+    position: absolute; inset: 5px;
+    border: 1px solid rgba(201,169,110,0.07);
+    border-radius: 4px;
+  }
+  .card-glyph {
+    font-size: 22px;
+    opacity: 0.35;
+    filter: sepia(1) saturate(0.5);
+  }
+  .card-number {
+    position: absolute;
+    top: 8px; left: 10px;
+    font-family: 'Cinzel', serif;
+    font-size: 9px;
+    color: var(--gold-dim);
+    letter-spacing: 0.1em;
+  }
+
+  /* FRONT (revealed) */
+  .card-front-face {
+    transform: rotateY(180deg);
+    background: linear-gradient(135deg, #1a1628 0%, #0e0e18 100%);
+    border: 1px solid var(--gold-dim);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    padding: 10px 8px;
+    text-align: center;
+    gap: 6px;
+  }
+  .card-wrap.selected .card-back-face {
+    border-color: var(--gold);
+    box-shadow: 0 0 24px var(--glow), inset 0 0 20px rgba(201,169,110,0.05);
+    background: linear-gradient(135deg, #1a1528 0%, #12121c 100%);
+  }
+  .card-wrap.selected .card-glyph {
+    opacity: 0.7;
+  }
+  .selected-overlay {
+    position: absolute; inset: 0;
+    border-radius: 10px;
+    border: 2px solid var(--gold);
+    box-shadow: 0 0 20px var(--glow), inset 0 0 30px rgba(201,169,110,0.08);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.4s;
+  }
+  .card-wrap.selected .selected-overlay { opacity: 1; }
+
+  .reveal-name {
+    font-family: 'Cinzel', serif;
+    font-size: 9px;
+    color: var(--gold);
+    letter-spacing: 0.1em;
+    line-height: 1.4;
+  }
+  .reveal-pos {
+    font-size: 10px;
+    color: var(--muted);
+    font-style: italic;
+  }
+  .reveal-icon { font-size: 20px; }
+
+  /* ── BOTTOM CTA ── */
+  #cta {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    padding: 16px 20px 28px;
+    background: linear-gradient(to top, var(--bg) 60%, transparent);
+    z-index: 10;
+    display: flex; flex-direction: column; align-items: center; gap: 10px;
+    transform: translateY(100%);
+    transition: transform 0.5s cubic-bezier(0.23, 1, 0.32, 1);
+  }
+  #cta.visible { transform: translateY(0); }
+
+  .hint {
+    font-size: 12px;
+    color: var(--muted);
+    font-style: italic;
+    text-align: center;
+  }
+  #confirm-btn {
+    width: 100%;
+    max-width: 320px;
+    padding: 15px 24px;
+    background: linear-gradient(135deg, #c9a96e, #a07840);
+    border: none; border-radius: 10px;
+    color: #0a0a0f;
+    font-family: 'Cinzel', serif;
+    font-size: 13px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    cursor: pointer;
+    font-weight: 600;
+    box-shadow: 0 4px 24px rgba(201,169,110,0.3);
+    transition: transform 0.15s, box-shadow 0.15s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #confirm-btn:active {
+    transform: scale(0.97);
+    box-shadow: 0 2px 12px rgba(201,169,110,0.2);
+  }
+
+  /* ── ENTRANCE ANIMATIONS ── */
+  .card-wrap {
+    opacity: 0;
+    animation: card-in 0.5s ease forwards;
+  }
+  @keyframes card-in {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ── DIVIDER ── */
+  .divider {
+    width: 60px; height: 1px;
+    background: linear-gradient(to right, transparent, var(--gold-dim), transparent);
+    margin: 16px auto 0;
+  }
+</style>
+</head>
+<body>
+
+<div id="stars"></div>
+
+<div id="app">
+  <header>
+    <span class="eye">𓂀</span>
+    <h1>Выберите три карты</h1>
+    <div class="question-box" id="question-display">Загрузка...</div>
+    <div class="divider"></div>
+    <div class="counter">
+      <div class="dot" id="d0"></div>
+      <div class="dot" id="d1"></div>
+      <div class="dot" id="d2"></div>
+      <span class="counter-text" id="counter-text">0 / 3</span>
+    </div>
+  </header>
+
+  <div class="grid" id="grid"></div>
+</div>
+
+<div id="cta">
+  <p class="hint">Карты выбраны. Готовы к разбору?</p>
+  <button id="confirm-btn" onclick="confirm()">Открыть расклад</button>
+</div>
+
+<script>
+// ── TELEGRAM WEBAPP INIT ──────────────────────────────────────────────────
+const tg = window.Telegram.WebApp;
+tg.ready();
+tg.expand();
+tg.setHeaderColor('#0a0a0f');
+tg.setBackgroundColor('#0a0a0f');
+
+// Parse initData
+const params   = new URLSearchParams(tg.initData);
+const rawUser  = params.get('user');
+let   question = 'Общий расклад';
+let   deck     = [];
+
+try {
+  // Читаем ?data= из URL (base64url)
+  const urlParams = new URLSearchParams(window.location.search);
+  const raw = urlParams.get('data');
+  if (raw) {
+    const decoded = JSON.parse(atob(decodeURIComponent(raw).replace(/-/g,'+').replace(/_/g,'/')));
+    question = decoded.question || question;
+    deck     = decoded.deck     || [];
+  }
+} catch(e) { console.error('parse error', e); }
+
+// Fallback deck for preview
+if (!deck.length) {
+  const NAMES = ['Шут','Маг','Верховная Жрица','Императрица','Император',
+    'Влюблённые','Колесница','Сила','Луна'];
+  deck = NAMES.map(n => ({ name: n, reversed: Math.random() < 0.5 }));
+}
+
+// ── STARS ────────────────────────────────────────────────────────────────
+const starsEl = document.getElementById('stars');
+for (let i = 0; i < 80; i++) {
+  const s = document.createElement('div');
+  s.className = 'star';
+  const size = Math.random() * 2 + 0.5;
+  const minOp = (Math.random() * 0.1 + 0.05).toFixed(2);
+  const maxOp = (Math.random() * 0.4 + 0.15).toFixed(2);
+  s.style.cssText = `
+    width:${size}px; height:${size}px;
+    left:${Math.random()*100}%; top:${Math.random()*100}%;
+    --d:${(Math.random()*4+2).toFixed(1)}s;
+    --delay:-${(Math.random()*6).toFixed(1)}s;
+    --min-op:${minOp}; --max-op:${maxOp};
+  `;
+  starsEl.appendChild(s);
+}
+
+// ── STATE ────────────────────────────────────────────────────────────────
+const selected = [];
+
+// ── RENDER QUESTION ───────────────────────────────────────────────────────
+document.getElementById('question-display').textContent = question;
+
+// ── GLYPHS ────────────────────────────────────────────────────────────────
+const GLYPHS = ['☽','✦','⊕','⋆','✧','⊗','☿','♄','♃','✵','⊙','◈','⟁','⌘','⊛','⊜','✶','⊞'];
+function glyph(i) { return GLYPHS[i % GLYPHS.length]; }
+
+// ── BUILD GRID ────────────────────────────────────────────────────────────
+const grid = document.getElementById('grid');
+deck.forEach((card, i) => {
+  const wrap = document.createElement('div');
+  wrap.className = 'card-wrap';
+  wrap.style.animationDelay = `${i * 60}ms`;
+
+  wrap.innerHTML = `
+    <div class="card-inner">
+      <div class="card-face card-back-face">
+        <div class="selected-overlay"></div>
+        <span class="card-number">${String(i+1).padStart(2,'0')}</span>
+        <div class="card-pattern">
+          <span class="card-glyph">${glyph(i)}</span>
+        </div>
+      </div>
+      <div class="card-face card-front-face">
+        <span class="reveal-icon">${glyph(i)}</span>
+        <span class="reveal-name">${card.name}</span>
+        <span class="reveal-pos">${card.reversed ? 'перевёрнутая' : 'прямая'}</span>
+      </div>
+    </div>`;
+
+  wrap.addEventListener('click', () => toggle(wrap, i));
+  grid.appendChild(wrap);
+});
+
+// ── TOGGLE ────────────────────────────────────────────────────────────────
+function toggle(wrap, idx) {
+  if (wrap.classList.contains('selected')) {
+    wrap.classList.remove('selected');
+    const pos = selected.indexOf(idx);
+    if (pos !== -1) selected.splice(pos, 1);
+    updateCounter();
+    return;
+  }
+  if (selected.length >= 3) {
+    tg.HapticFeedback.notificationOccurred('error');
+    return;
+  }
+  selected.push(idx);
+  wrap.classList.add('selected');
+  tg.HapticFeedback.impactOccurred('medium');
+  updateCounter();
+}
+
+function updateCounter() {
+  for (let i = 0; i < 3; i++) {
+    document.getElementById(`d${i}`).classList.toggle('filled', i < selected.length);
+  }
+  document.getElementById('counter-text').textContent = `${selected.length} / 3`;
+  const cta = document.getElementById('cta');
+  if (selected.length === 3) {
+    cta.classList.add('visible');
+    tg.HapticFeedback.notificationOccurred('success');
+  } else {
+    cta.classList.remove('visible');
+  }
+}
+
+// ── CONFIRM ───────────────────────────────────────────────────────────────
+function confirm() {
+  if (selected.length !== 3) return;
+  tg.HapticFeedback.impactOccurred('heavy');
+
+  const chosenCards = selected.map(i => deck[i]);
+  tg.sendData(JSON.stringify({ selected, cards: chosenCards }));
+}
+</script>
+</body>
+</html>
